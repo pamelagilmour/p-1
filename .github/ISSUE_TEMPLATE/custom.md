@@ -1,7 +1,7 @@
 ---
-name: Custom issue template
-about: Describe this issue template's purpose here.
-title: ''
+name: Task
+about: Standard task template for portfolio projects
+title: '[TASK]'
 labels: ''
 assignees: ''
 
