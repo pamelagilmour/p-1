@@ -5,6 +5,10 @@ from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 
+# Import new modules
+from models imporet UserRegister, UserLogin, TokenResponse, UserResponse
+from auth import hash_password, verify_password, create_access_token
+
 # Load environment vars
 load_dotenv()
 
