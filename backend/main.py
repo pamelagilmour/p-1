@@ -14,7 +14,7 @@ app = FastAPI(title="AI Knowledge Base API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # The dev server
+    allow_origins=["http://localhost:3001"], # The dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -26,7 +26,7 @@ def get_db_connection():
     conn = psycopg2.connect(
         host="localhost",
         database="knowledge_base",
-        user="homefolder",
+        user="",
         password="",
         cursor_factory=RealDictCursor
     )
