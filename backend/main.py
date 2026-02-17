@@ -4,9 +4,14 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
+from typing import List
 
 # Import new modules
-from models import UserRegister, UserLogin, TokenResponse, UserResponse
+from models import (
+    UserRegister, UserLogin, TokenResponse, UserResponse,
+    KnowledgeEntryCreate, KnowledgeEntryUpdate, KnowledgeEntryResponse
+
+)
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 # Load environment vars
@@ -18,7 +23,7 @@ app = FastAPI(title="AI Knowledge Base API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001"], # The dev server
+    allow_origins=["http://localhost:3000"], # The dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -196,28 +201,235 @@ def get_me(current_user: dict = Depends(get_current_user)):
         )
 
 # Protected endpoint, entries
+from typing import List
 
-@app.get("/api/entries")
+# Add this line at the top with your other imports
+# Then replace the old get_entries with this:
+
+@app.get("/api/entries", response_model=List[KnowledgeEntryResponse])
 def get_entries(current_user: dict = Depends(get_current_user)):
-    """
-    Get all knowledge entries for the authenticated user
-    This endpoint is now PROTECTED
-    """
+    """Get all knowledge entries for the authenticated user"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Only get entries for the current user
+        
         cursor.execute(
-            "SELECT * FROM knowledge_entries WHERE user_id = %s",
-            (current_user['user_id'])
+            """SELECT id, user_id, title, content, tags, created_at, updated_at 
+               FROM knowledge_entries 
+               WHERE user_id = %s 
+               ORDER BY created_at DESC""",
+            (current_user['user_id'],)
         )
         entries = cursor.fetchall()
         cursor.close()
         conn.close()
+        
+        # Return array directly, not wrapped in dict
+        result = []
+        for entry in entries:
+            # Handle tags properly
+            tags = entry['tags'] if entry['tags'] else []
+            
+            result.append(KnowledgeEntryResponse(
+                id=entry['id'],
+                user_id=entry['user_id'],
+                title=entry['title'],
+                content=entry['content'],
+                tags=tags,
+                created_at=str(entry['created_at']),
+                updated_at=str(entry['updated_at'])
+            ))
+        
+        return result
+        
+    except Exception as e:
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-        return {"entries": entries}
+# Knowledge entries endpoints
 
+@app.post("/api/entries", response_model=KnowledgeEntryResponse, status_code=status.HTTP_201_CREATED)
+def create_entry(
+    entry: KnowledgeEntryCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new knowledge entry"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """INSERT INTO knowledge_entries (user_id, title, content, tags)
+               VALUES (%s, %s, %s, %s)
+               RETURNING id, user_id, title, content, tags, created_at, updated_at""",
+            (current_user['user_id'], entry.title, entry.content, entry.tags)
+        )
+        new_entry = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return KnowledgeEntryResponse(
+            id=new_entry['id'],
+            user_id=new_entry['user_id'],
+            title=new_entry['title'],
+            content=new_entry['content'],
+            tags=new_entry['tags'] or [],
+            created_at=str(new_entry['created_at']),
+            updated_at=str(new_entry['updated_at'])
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.get("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
+def get_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
+    """Get a specific knowledge entry"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """SELECT id, user_id, title, content, tags, created_at, updated_at
+               FROM knowledge_entries
+               WHERE id = %s AND user_id = %s""",
+            (entry_id, current_user['user_id'])
+        )
+        entry = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not entry:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Entry not found"
+            )
+        
+        return KnowledgeEntryResponse(
+            id=entry['id'],
+            user_id=entry['user_id'],
+            title=entry['title'],
+            content=entry['content'],
+            tags=entry['tags'] or [],
+            created_at=str(entry['created_at']),
+            updated_at=str(entry['updated_at'])
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.put("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
+def update_entry(
+    entry_id: int,
+    entry_update: KnowledgeEntryUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a knowledge entry"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check entry exists and belongs to user
+        cursor.execute(
+            "SELECT id FROM knowledge_entries WHERE id = %s AND user_id = %s",
+            (entry_id, current_user['user_id'])
+        )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Entry not found"
+            )
+        
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        update_values = []
+        
+        if entry_update.title is not None:
+            update_fields.append("title = %s")
+            update_values.append(entry_update.title)
+        
+        if entry_update.content is not None:
+            update_fields.append("content = %s")
+            update_values.append(entry_update.content)
+        
+        if entry_update.tags is not None:
+            update_fields.append("tags = %s")
+            update_values.append(entry_update.tags)
+        
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        
+        update_values.append(entry_id)
+        update_values.append(current_user['user_id'])
+        
+        query = f"""
+            UPDATE knowledge_entries 
+            SET {', '.join(update_fields)}
+            WHERE id = %s AND user_id = %s
+            RETURNING id, user_id, title, content, tags, created_at, updated_at
+        """
+        
+        cursor.execute(query, update_values)
+        updated_entry = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return KnowledgeEntryResponse(
+            id=updated_entry['id'],
+            user_id=updated_entry['user_id'],
+            title=updated_entry['title'],
+            content=updated_entry['content'],
+            tags=updated_entry['tags'] or [],
+            created_at=str(updated_entry['created_at']),
+            updated_at=str(updated_entry['updated_at'])
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.delete("/api/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a knowledge entry"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "DELETE FROM knowledge_entries WHERE id = %s AND user_id = %s RETURNING id",
+            (entry_id, current_user['user_id'])
+        )
+        deleted = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Entry not found"
+            )
+        
+        return None
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, validator
 
 class UserRegister(BaseModel):
     """Model for user registration"""
@@ -7,10 +7,6 @@ class UserRegister(BaseModel):
 
     @field_validator('password')
     def validate_password(cls, v):
-        print(f"DEBUG: Password value: {v}")
-        print(f"DEBUG: Password length: {len(v)}")
-        print(f"DEBUG: Password type: {type(v)}")
-
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
         if len(v) > 72:
@@ -33,3 +29,39 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+
+class KnowledgeEntryCreate(BaseModel):
+    """Model for creating a knowledge entry"""
+    title: str
+    content: str
+    tags: list[str] = []
+    
+    @validator('title')
+    def validate_title(cls, v):
+        if len(v) < 1:
+            raise ValueError('Title cannot be empty')
+        if len(v) > 500:
+            raise ValueError('Title cannot be longer than 500 characters')
+        return v
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if len(v) < 1:
+            raise ValueError('Content cannot be empty')
+        return v
+
+class KnowledgeEntryUpdate(BaseModel):
+    """Model for updating a knowledge entry"""
+    title: str | None = None
+    content: str | None = None
+    tags: list[str] | None = None
+
+class KnowledgeEntryResponse(BaseModel):
+    """Model for knowledge entry response"""
+    id: int
+    user_id: int
+    title: str
+    content: str
+    tags: list[str]
+    created_at: str
+    updated_at: str
