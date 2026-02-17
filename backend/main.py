@@ -116,13 +116,19 @@ def health_check():
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserRegister):
     """Register a new user"""
+    print(f"🔍 Register attempt for: {user.email}")
+    
     try:
         conn = get_db_connection()
+        print("✅ Database connected")
         cursor = conn.cursor()
         
         # Check if user already exists
         cursor.execute("SELECT id FROM users WHERE email = %s", (user.email,))
-        if cursor.fetchone():
+        existing = cursor.fetchone()
+        print(f"🔍 Existing user check: {existing}")
+        
+        if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -130,12 +136,15 @@ def register(user: UserRegister):
         
         # Hash password and create user
         hashed_password = hash_password(user.password)
+        print("✅ Password hashed")
+        
         cursor.execute(
             "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id, email, created_at",
             (user.email, hashed_password)
         )
         new_user = cursor.fetchone()
-
+        print(f"✅ User created: {new_user}")
+        
         conn.commit()
         cursor.close()
         conn.close()
@@ -149,6 +158,9 @@ def register(user: UserRegister):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
