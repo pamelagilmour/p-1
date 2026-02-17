@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, validator
+from pydantic import BaseModel, EmailStr, field_validator
 
 class UserRegister(BaseModel):
     """Model for user registration"""
@@ -36,7 +36,7 @@ class KnowledgeEntryCreate(BaseModel):
     content: str
     tags: list[str] = []
     
-    @validator('title')
+    @field_validator('title')
     def validate_title(cls, v):
         if len(v) < 1:
             raise ValueError('Title cannot be empty')
@@ -44,7 +44,7 @@ class KnowledgeEntryCreate(BaseModel):
             raise ValueError('Title cannot be longer than 500 characters')
         return v
     
-    @validator('content')
+    @field_validator('content')
     def validate_content(cls, v):
         if len(v) < 1:
             raise ValueError('Content cannot be empty')
