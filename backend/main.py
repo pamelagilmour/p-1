@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 # Import new modules
 from models import UserRegister, UserLogin, TokenResponse, UserResponse
-from auth import hash_password, verify_password, create_access_token
+from auth import hash_password, verify_password, create_access_token, get_current_user
 
 # Load environment vars
 load_dotenv()
@@ -64,22 +64,6 @@ def health_check():
             "status": "unhealthy",
             "database": f"error: {str(e)}"
         }
-
-@app.get("/api/entries")
-def get_entries():
-    """Get all knowledge entries (test endpoint)"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM knowledge_entries")
-        entries = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        return {"entries": entries}
-
-    except Exception as e:
-        return {"error": str(e)}
 
 # Auth Endpoints
 
@@ -165,6 +149,75 @@ def login(user: UserLogin):
     
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user)):
+    """
+    Get current authenticated user
+    This endpoint is PROTECTED - requires valid JWT token
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get user from database using user_id from token
+        cursor.execute(
+            "SELECT id, email, created_at FROM users WHERE id = %s",
+            (current_user['user_id'],)
+        )
+        user = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return UserResponse(
+            id=user['id'],
+            email=user['email'],
+            created_at=str(user['created_at'])
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# Protected endpoint, entries
+
+@app.get("/api/entries")
+def get_entries(current_user: dict = Depends(get_current_user)):
+    """
+    Get all knowledge entries for the authenticated user
+    This endpoint is now PROTECTED
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Only get entries for the current user
+        cursor.execute(
+            "SELECT * FROM knowledge_entries WHERE user_id = %s",
+            (current_user['user_id'])
+        )
+        entries = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return {"entries": entries}
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

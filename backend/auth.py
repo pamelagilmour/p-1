@@ -1,6 +1,8 @@
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 
 # Password hashing context
@@ -10,6 +12,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
+
+# Security scheme for Bearer token
+security = HTTPBearer()
 
 def hash_password(password: str) -> str:
     """Hash a password"""
@@ -35,3 +40,19 @@ def verify_token(token: str) -> dict:
     except JWTError:
         return None
 
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """
+    Dependency to get current authenticated user from JWT token
+    Use this in protected endpoints: user = Depends(get_current_user)
+    """
+    token = credentials.credentials
+    payload = verify_token(token)
+    
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return payload  # Returns {"user_id": 1, "email": "user@example.com"}
