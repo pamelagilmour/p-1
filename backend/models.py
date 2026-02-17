@@ -65,3 +65,7 @@ class KnowledgeEntryResponse(BaseModel):
     tags: list[str]
     created_at: str
     updated_at: str
+
+class ChatMessage(BaseModel):
+    """Model for chat messages"""
+    message: str

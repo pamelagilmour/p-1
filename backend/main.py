@@ -9,10 +9,12 @@ from typing import List
 # Import new modules
 from models import (
     UserRegister, UserLogin, TokenResponse, UserResponse,
-    KnowledgeEntryCreate, KnowledgeEntryUpdate, KnowledgeEntryResponse
+    KnowledgeEntryCreate, KnowledgeEntryUpdate, KnowledgeEntryResponse,
+    ChatMessage
 
 )
 from auth import hash_password, verify_password, create_access_token, get_current_user
+from ai_service import chat_with_knowledge_base
 
 # Load environment vars
 load_dotenv()
@@ -430,6 +432,24 @@ def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
         return None
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.post("/api/chat")
+def chat(
+    chat_message: ChatMessage,
+    current_user: dict = Depends(get_current_user)
+):
+    """Send a message to Claude with knowledge base access"""
+    try:
+        response = chat_with_knowledge_base(
+            message=chat_message.message,
+            user_id=current_user['user_id']
+        )
+        return {"response": response}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
