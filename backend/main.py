@@ -22,59 +22,6 @@ from models import (
 )
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from ai_service import chat_with_knowledge_base
-import psycopg2
-from psycopg2 import sql
-
-# Create tables on startup
-@app.on_event("startup")
-def startup_event():
-    """Initialize database tables on startup"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Create users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        # Create knowledge_entries table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS knowledge_entries (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                title VARCHAR(500) NOT NULL,
-                content TEXT NOT NULL,
-                tags TEXT[],
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        # Create indexes
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_knowledge_entries_user_id 
-            ON knowledge_entries(user_id);
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_knowledge_entries_tags 
-            ON knowledge_entries USING GIN(tags);
-        """)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("✅ Database tables initialized!")
-        
-    except Exception as e:
-        print(f"⚠️  Database initialization error: {e}")
 
 # Load environment vars
 load_dotenv()
