@@ -151,10 +151,10 @@ POST /api/chat             - Send message to Claude
 - [x] Claude API integration
 - [x] Agentic loop (Claude decides which tools to use)
 - [x] Chat interface in dashboard
+- [x] Redis caching for API responses
+- [x] Rate limiting (token bucket algorithm)
 
 **In Progress ⏳**
-- [ ] Redis caching for API responses
-- [ ] Rate limiting (token bucket algorithm)
 - [ ] Background job processing
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Deployment (Vercel + Railway)
