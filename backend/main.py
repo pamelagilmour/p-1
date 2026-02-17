@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 from typing import List
+from cache_service import (
+    get_cache, set_cache, delete_cache, 
+    delete_cache_pattern, clear_user_cache, get_cache_stats
+)
 
 # Import new modules
 from models import (
@@ -96,7 +100,7 @@ def register(user: UserRegister):
             (user.email, hashed_password)
         )
         new_user = cursor.fetchone()
-        
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -203,14 +207,18 @@ def get_me(current_user: dict = Depends(get_current_user)):
         )
 
 # Protected endpoint, entries
-from typing import List
-
-# Add this line at the top with your other imports
-# Then replace the old get_entries with this:
-
+# Update get_entries endpoint with caching
 @app.get("/api/entries", response_model=List[KnowledgeEntryResponse])
 def get_entries(current_user: dict = Depends(get_current_user)):
-    """Get all knowledge entries for the authenticated user"""
+    """Get all knowledge entries for the authenticated user (cached)"""
+    
+    # Check cache first
+    cache_key = f"entries:user:{current_user['user_id']}:all"
+    cached = get_cache(cache_key)
+    if cached:
+        return cached
+    
+    # Cache miss - fetch from database
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -226,10 +234,8 @@ def get_entries(current_user: dict = Depends(get_current_user)):
         cursor.close()
         conn.close()
         
-        # Return array directly, not wrapped in dict
         result = []
         for entry in entries:
-            # Handle tags properly
             tags = entry['tags'] if entry['tags'] else []
             
             result.append(KnowledgeEntryResponse(
@@ -241,6 +247,23 @@ def get_entries(current_user: dict = Depends(get_current_user)):
                 created_at=str(entry['created_at']),
                 updated_at=str(entry['updated_at'])
             ))
+        
+        # Convert to dict for caching
+        result_dict = [
+            {
+                "id": e.id,
+                "user_id": e.user_id,
+                "title": e.title,
+                "content": e.content,
+                "tags": e.tags,
+                "created_at": e.created_at,
+                "updated_at": e.updated_at
+            }
+            for e in result
+        ]
+        
+        # Cache for 15 minutes
+        set_cache(cache_key, result_dict, ttl=900)
         
         return result
         
@@ -255,11 +278,47 @@ def get_entries(current_user: dict = Depends(get_current_user)):
 
 # Knowledge entries endpoints
 
+# Update create_entry to invalidate cache
 @app.post("/api/entries", response_model=KnowledgeEntryResponse, status_code=status.HTTP_201_CREATED)
 def create_entry(
     entry: KnowledgeEntryCreate,
     current_user: dict = Depends(get_current_user)
 ):
+    """Create a new knowledge entry (invalidates cache)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """INSERT INTO knowledge_entries (user_id, title, content, tags)
+               VALUES (%s, %s, %s, %s)
+               RETURNING id, user_id, title, content, tags, created_at, updated_at""",
+            (current_user['user_id'], entry.title, entry.content, entry.tags)
+        )
+        new_entry = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Invalidate cache for this user
+        clear_user_cache(current_user['user_id'])
+        
+        return KnowledgeEntryResponse(
+            id=new_entry['id'],
+            user_id=new_entry['user_id'],
+            title=new_entry['title'],
+            content=new_entry['content'],
+            tags=new_entry['tags'] or [],
+            created_at=str(new_entry['created_at']),
+            updated_at=str(new_entry['updated_at'])
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
     """Create a new knowledge entry"""
     try:
         conn = get_db_connection()
@@ -276,6 +335,9 @@ def create_entry(
         conn.commit()
         cursor.close()
         conn.close()
+
+        # Invalidate this user's entries list cache
+        cache_delete_pattern(f"entries:user:{current_user['user_id']}")
         
         return KnowledgeEntryResponse(
             id=new_entry['id'],
@@ -294,6 +356,46 @@ def create_entry(
 
 @app.get("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
 def get_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
+    """Get a specific knowledge entry"""
+    
+    cache_key = f"entry:{entry_id}:user:{current_user['user_id']}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT id, user_id, title, content, tags, created_at, updated_at
+               FROM knowledge_entries
+               WHERE id = %s AND user_id = %s""",
+            (entry_id, current_user['user_id'])
+        )
+        entry = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not entry:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        result = KnowledgeEntryResponse(
+            id=entry['id'],
+            user_id=entry['user_id'],
+            title=entry['title'],
+            content=entry['content'],
+            tags=entry['tags'] or [],
+            created_at=str(entry['created_at']),
+            updated_at=str(entry['updated_at'])
+        )
+        
+        cache_set(cache_key, result.model_dump(), ttl=300)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     """Get a specific knowledge entry"""
     try:
         conn = get_db_connection()
@@ -332,18 +434,18 @@ def get_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
             detail=str(e)
         )
 
+# Update update_entry to invalidate cache
 @app.put("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
 def update_entry(
     entry_id: int,
     entry_update: KnowledgeEntryUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update a knowledge entry"""
+    """Update a knowledge entry (invalidates cache)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check entry exists and belongs to user
         cursor.execute(
             "SELECT id FROM knowledge_entries WHERE id = %s AND user_id = %s",
             (entry_id, current_user['user_id'])
@@ -354,7 +456,6 @@ def update_entry(
                 detail="Entry not found"
             )
         
-        # Build update query dynamically based on provided fields
         update_fields = []
         update_values = []
         
@@ -389,6 +490,9 @@ def update_entry(
         cursor.close()
         conn.close()
         
+        # Invalidate cache for this user
+        clear_user_cache(current_user['user_id'])
+        
         return KnowledgeEntryResponse(
             id=updated_entry['id'],
             user_id=updated_entry['user_id'],
@@ -406,9 +510,10 @@ def update_entry(
             detail=str(e)
         )
 
+# Update delete_entry to invalidate cache
 @app.delete("/api/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
-    """Delete a knowledge entry"""
+    """Delete a knowledge entry (invalidates cache)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -429,6 +534,9 @@ def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
                 detail="Entry not found"
             )
         
+        # Invalidate cache for this user
+        clear_user_cache(current_user['user_id'])
+        
         return None
     except HTTPException:
         raise
@@ -438,8 +546,16 @@ def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
             detail=str(e)
         )
 
+# Add cache stats endpoint
+@app.get("/api/cache/stats")
+def cache_stats(current_user: dict = Depends(get_current_user)):
+    """Get Redis cache statistics (admin endpoint)"""
+    return get_cache_stats()
+
+
 @app.post("/api/chat")
 def chat(
+    request: Request,
     chat_message: ChatMessage,
     current_user: dict = Depends(get_current_user)
 ):
