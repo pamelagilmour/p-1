@@ -59,7 +59,12 @@ def rate_limit_dependency(current_user: dict = Depends(get_current_user)):
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # The dev server
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://p-11-one.vercel.app/",  # Add your actual Vercel URL
+        "https://*.vercel.app",  # Allow all Vercel preview deployments
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]

@@ -223,7 +223,31 @@ Response (200 OK):
 }
 ```
 
----
+## Rate Limiting
+
+All protected endpoints are rate limited to **100 requests per minute per user**.
+
+**Response Headers:**
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 85
+X-RateLimit-Reset: 1708197123
+```
+
+**Rate Limit Exceeded (429):**
+```json
+{
+  "detail": "Rate limit exceeded. Try again in 42 seconds."
+}
+```
+
+**Headers on 429:**
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1708197123
+Retry-After: 42
+```
 
 ## Design Decisions
 

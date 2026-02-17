@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface KnowledgeEntry {
   id: number;
   title: string;
@@ -47,7 +49,7 @@ export default function DashboardPage() {
 
   const fetchEntries = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/entries', {
+      const response = await fetch(`${API_URL}/api/entries`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -83,8 +85,8 @@ export default function DashboardPage() {
     try {
       const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t);
       const url = editingEntry
-        ? `http://localhost:8000/api/entries/${editingEntry.id}`
-        : 'http://localhost:8000/api/entries';
+        ? `${API_URL}/api/entries/${editingEntry.id}`
+        : `${API_URL}/api/entries`;
 
       const method = editingEntry ? 'PUT' : 'POST';
 
@@ -128,7 +130,7 @@ export default function DashboardPage() {
     if (!confirm('Are you sure you want to delete this entry?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/entries/${id}`, {
+      const response = await fetch(`${API_URL}/api/entries/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -164,7 +166,7 @@ export default function DashboardPage() {
     setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await fetch('http://localhost:8000/api/chat', {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
