@@ -73,13 +73,26 @@ app.add_middleware(
 # Database connection helper
 def get_db_connection():
     """Create a database connection"""
-    conn = psycopg2.connect(
-        host="localhost",
-        database="knowledge_base",
-        user="",
-        password="",
-        cursor_factory=RealDictCursor
-    )
+
+    # Use DATABASE_URL from environment (Railway sets this automatically)
+    database_url = os.getenv("DATABASE_URL")
+
+    if database_url:
+        # Railway/Production - use DATABASE_URL
+        conn = psycopg2.connect(
+            database_url,
+            cursor_factory=RealDictCursor
+        )
+    else:
+        # Local development - use individual params
+        conn = psycopg2.connect(
+            host="localhost",
+            database="knowledge_base",
+            user="",  # Your Mac username for local
+            password="",
+            cursor_factory=RealDictCursor
+        )
+    
     return conn
 
 # Health check endpoint
