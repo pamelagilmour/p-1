@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 # Import new modules
-from models imporet UserRegister, UserLogin, TokenResponse, UserResponse
+from models import UserRegister, UserLogin, TokenResponse, UserResponse
 from auth import hash_password, verify_password, create_access_token
 
 # Load environment vars
@@ -80,3 +80,93 @@ def get_entries():
 
     except Exception as e:
         return {"error": str(e)}
+
+# Auth Endpoints
+
+@app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user: UserRegister):
+    """Register a new user"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if user already exists
+        cursor.execute("SELECT id FROM users WHERE email = %s", (user.email,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Hash password and create user
+        hashed_password = hash_password(user.password)
+        cursor.execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id, email, created_at",
+            (user.email, hashed_password)
+        )
+        new_user = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return UserResponse(
+            id=new_user['id'],
+            email=new_user['email'],
+            created_at=str(new_user['created_at'])
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+def login(user: UserLogin):
+    """Login and get access token"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Find user by email
+        cursor.execute(
+            "SELECT id, email, password_hash, created_at FROM users WHERE email = %s",
+            (user.email,)
+        )
+        db_user = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        # Verify user exists and password is correct
+        if not db_user or not verify_password(user.password, db_user['password_hash']):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+        
+        # Create access token
+        access_token = create_access_token(
+            data={"user_id": db_user['id'], "email": db_user['email']}
+        )
+        
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse(
+                id=db_user['id'],
+                email=db_user['email'],
+                created_at=str(db_user['created_at'])
+            )
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
