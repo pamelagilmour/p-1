@@ -2,17 +2,150 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
+interface KnowledgeEntry {
+  id: number;
+  title: string;
+  content: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
 
 export default function DashboardPage() {
-  const { user, logout, loading } = useAuth();
+  const { user, token, logout, loading } = useAuth();
   const router = useRouter();
+  
+  const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<KnowledgeEntry | null>(null);
+  
+  // Form state
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [tags, setTags] = useState('');
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (user && token) {
+      fetchEntries();
+    }
+  }, [user, token]);
+
+  const fetchEntries = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/entries', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch entries, status:', response.status);
+        setEntries([]);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('Fetched entries data:', data);
+      
+      // Make sure data is an array
+      if (Array.isArray(data)) {
+        setEntries(data);
+      } else {
+        console.error('Expected array, got:', typeof data, data);
+        setEntries([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch entries:', error);
+      setEntries([]);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    setFormLoading(true);
+
+    try {
+      const tagsArray = tags.split(',').map(t => t.trim()).filter(t => t);
+      const url = editingEntry
+        ? `http://localhost:8000/api/entries/${editingEntry.id}`
+        : 'http://localhost:8000/api/entries';
+      
+      const method = editingEntry ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, content, tags: tagsArray })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to save entry');
+      }
+
+      // Reset form and refresh entries
+      setTitle('');
+      setContent('');
+      setTags('');
+      setShowForm(false);
+      setEditingEntry(null);
+      await fetchEntries();
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleEdit = (entry: KnowledgeEntry) => {
+    setEditingEntry(entry);
+    setTitle(entry.title);
+    setContent(entry.content);
+    setTags(entry.tags.join(', '));
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this entry?')) return;
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/entries/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        await fetchEntries();
+      }
+    } catch (error) {
+      console.error('Failed to delete entry:', error);
+    }
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingEntry(null);
+    setTitle('');
+    setContent('');
+    setTags('');
+    setFormError('');
+  };
 
   if (loading) {
     return (
@@ -32,7 +165,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-950">AI Knowledge Base</h1>
+              <h1 className="text-xl font-bold">AI Knowledge Base</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">{user.email}</span>
@@ -49,25 +182,145 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-2xl font-bold mb-4 text-gray-950">Welcome back! 🎉</h2>
-            <p className="text-gray-600 mb-4">
-              You're successfully logged in and authenticated.
-            </p>
-            
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-semibold text-blue-900 mb-2">Your Info:</h3>
-              <p className="text-blue-800"><strong>Email:</strong> {user.email}</p>
-              <p className="text-blue-800"><strong>User ID:</strong> {user.id}</p>
-              <p className="text-blue-800"><strong>Member since:</strong> {new Date(user.created_at).toLocaleDateString()}</p>
-            </div>
-
-            <div className="mt-6">
-              <p className="text-gray-600">
-                Next up: We'll add knowledge entry creation here! (Task 16)
-              </p>
-            </div>
+          
+          {/* Header with Add Button */}
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Your Knowledge Entries</h2>
+            {!showForm && (
+              <button
+                onClick={() => setShowForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                + New Entry
+              </button>
+            )}
           </div>
+
+          {/* Create/Edit Form */}
+          {showForm && (
+            <div className="bg-white shadow rounded-lg p-6 mb-6">
+              <h3 className="text-xl font-semibold mb-4">
+                {editingEntry ? 'Edit Entry' : 'New Entry'}
+              </h3>
+              
+              {formError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded mb-4">
+                  {formError}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-950"
+                    placeholder="Entry title..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Content
+                  </label>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    required
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-950"
+                    placeholder="Write your knowledge entry here..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tags (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-950"
+                    placeholder="react, typescript, tutorial"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {formLoading ? 'Saving...' : editingEntry ? 'Update' : 'Create'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelForm}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Entries List */}
+          {entries.length === 0 ? (
+            <div className="bg-white shadow rounded-lg p-12 text-center">
+              <p className="text-gray-500 text-lg mb-4">No entries yet!</p>
+              <p className="text-gray-400">Click "New Entry" to create your first knowledge entry.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {entries.map((entry) => (
+                <div key={entry.id} className="bg-white shadow rounded-lg p-6">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-xl font-semibold">{entry.title}</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(entry)}
+                        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-700 whitespace-pre-wrap mb-3">{entry.content}</p>
+                  
+                  {entry.tags.length > 0 && (
+                    <div className="flex gap-2 flex-wrap mb-2">
+                      {entry.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-sm text-gray-500">
+                    Created: {new Date(entry.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </div>
