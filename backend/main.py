@@ -62,7 +62,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://p-11-one.vercel.app/",  # Add your actual Vercel URL
+        "https://p-11-one.vercel.app",
         "https://*.vercel.app",  # Allow all Vercel preview deployments
     ],
     allow_credentials=True,
