@@ -151,6 +151,7 @@ npm test
 
 ## 📝 Documentation
 
+In Progress...
 - [Architecture Overview](./ARCHITECTURE.md)
 - [API Documentation](./API.md)
 - [MCP Server Documentation](./backend/mcp/README.md)
@@ -165,8 +166,8 @@ This project demonstrates:
 
 ## 📧 Contact
 
-Questions or feedback? Open an issue or reach out on [LinkedIn/Twitter/Email].
+Questions or feedback? Open an issue.
 
 ---
 
-Built as part of my software engineering portfolio | [View Other Projects](link-to-portfolio)
+Built as part of my software engineering portfolio | [View Other Projects](https://my-next-app.sodalitemix.workers.dev/)
