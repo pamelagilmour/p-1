@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi.responses import JSONResponse
+from rate_limiter import check_rate_limit, rate_limiter
+import time
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -25,6 +28,33 @@ load_dotenv()
 
 # Initialize app
 app = FastAPI(title="AI Knowledge Base API")
+
+
+# Add middleware to track rate limits on all requests
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Add rate limit headers to all responses"""
+    
+    # Skip rate limiting for public endpoints
+    public_paths = ["/", "/api/health", "/api/auth/register", "/api/auth/login", "/docs", "/openapi.json"]
+    
+    if request.url.path in public_paths:
+        response = await call_next(request)
+        return response
+    
+    # For protected endpoints, check if user is authenticated
+    # We'll do the actual rate limit check in the dependency
+    response = await call_next(request)
+    return response
+
+# Create dependency for rate limiting
+def rate_limit_dependency(current_user: dict = Depends(get_current_user)):
+    """
+    Dependency that checks rate limit for authenticated user
+    Use this in endpoints: Depends(rate_limit_dependency)
+    """
+    check_rate_limit(current_user['user_id'])
+    return current_user
 
 # Configure CORS
 app.add_middleware(
@@ -209,8 +239,8 @@ def get_me(current_user: dict = Depends(get_current_user)):
 # Protected endpoint, entries
 # Update get_entries endpoint with caching
 @app.get("/api/entries", response_model=List[KnowledgeEntryResponse])
-def get_entries(current_user: dict = Depends(get_current_user)):
-    """Get all knowledge entries for the authenticated user (cached)"""
+def get_entries(current_user: dict = Depends(rate_limit_dependency)):
+    """Get all knowledge entries (cached + rate limited)"""
     
     # Check cache first
     cache_key = f"entries:user:{current_user['user_id']}:all"
@@ -282,7 +312,7 @@ def get_entries(current_user: dict = Depends(get_current_user)):
 @app.post("/api/entries", response_model=KnowledgeEntryResponse, status_code=status.HTTP_201_CREATED)
 def create_entry(
     entry: KnowledgeEntryCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(rate_limit_dependency)
 ):
     """Create a new knowledge entry (invalidates cache)"""
     try:
@@ -355,7 +385,7 @@ def create_entry(
         )
 
 @app.get("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
-def get_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
+def get_entry(entry_id: int, current_user: dict = Depends(rate_limit_dependency)):
     """Get a specific knowledge entry"""
     
     cache_key = f"entry:{entry_id}:user:{current_user['user_id']}"
@@ -439,7 +469,7 @@ def get_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
 def update_entry(
     entry_id: int,
     entry_update: KnowledgeEntryUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(rate_limit_dependency)
 ):
     """Update a knowledge entry (invalidates cache)"""
     try:
@@ -512,7 +542,7 @@ def update_entry(
 
 # Update delete_entry to invalidate cache
 @app.delete("/api/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_entry(entry_id: int, current_user: dict = Depends(get_current_user)):
+def delete_entry(entry_id: int, current_user: dict = Depends(rate_limit_dependency)):
     """Delete a knowledge entry (invalidates cache)"""
     try:
         conn = get_db_connection()
@@ -557,7 +587,7 @@ def cache_stats(current_user: dict = Depends(get_current_user)):
 def chat(
     request: Request,
     chat_message: ChatMessage,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(rate_limit_dependency)
 ):
     """Send a message to Claude with knowledge base access"""
     try:
@@ -571,3 +601,15 @@ def chat(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+@app.get("/api/rate-limit/status")
+def rate_limit_status(current_user: dict = Depends(get_current_user)):
+    """Get current rate limit status for user"""
+    result = rate_limiter.check_rate_limit(current_user['user_id'])
+    return {
+        "user_id": current_user['user_id'],
+        "requests_remaining": result['remaining'],
+        "requests_limit": result['limit'],
+        "reset_time": result['reset_time'],
+        "reset_in_seconds": result['reset_time'] - int(time.time())
+    }
