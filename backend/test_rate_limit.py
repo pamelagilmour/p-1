@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 # Login first
 login_response = requests.post(`${API_URL}/api/auth/login`, json={
     "email": "pam@example.com",
-    "password": "stringVibes"
+    "password": "stringVibes" 
 })
 token = login_response.json()['access_token']
 

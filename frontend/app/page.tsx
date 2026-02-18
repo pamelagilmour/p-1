@@ -22,7 +22,7 @@ export default function Home() {
       </div>
     );
   }
-  console.log('API_URL:', process.env.NEXT_PUBLIC_API_URL);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="text-center">

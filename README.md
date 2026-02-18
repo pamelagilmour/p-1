@@ -153,17 +153,18 @@ POST /api/chat             - Send message to Claude
 - [x] Chat interface in dashboard
 - [x] Redis caching for API responses
 - [x] Rate limiting (token bucket algorithm)
+- [x] Deployment (Vercel + Railway)
 
 **In Progress ⏳**
-- [ ] Background job processing
 - [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Deployment (Vercel + Railway)
+
 
 **Planned 📋**
 - [ ] Search endpoint with full-text search
 - [ ] Pagination for large entry lists
 - [ ] Entry categories
 - [ ] Export knowledge base
+- [ ] Background job processing
 
 ## 🚦 Getting Started
 
@@ -254,20 +255,20 @@ http://localhost:8000/docs
 - Input validation with Pydantic models
 - CORS configuration
 - Agentic AI loop with tool orchestration
-
-**Coming Soon:**
 - Redis caching (target: 80%+ cache hit rate)
 - Rate limiting (token bucket: 100 req/min per user)
+
+**Coming Soon:**
 - Background job processing for long AI tasks
 - Horizontal scaling strategy
 
 ## 🚀 Deployment
 
-- Frontend: Vercel (coming soon)
-- Backend: Railway (coming soon)
+- Frontend: [Vercel](https://p-11-one.vercel.app/)
+- Backend: [Railway](https://p-1-production.up.railway.app/)
 - Database: Railway PostgreSQL (coming soon)
 
-[Live Demo](#) - Coming soon!
+[Live Demo](https://p-11-one.vercel.app/) AI chat disabled.
 
 ## 📝 Documentation
 
