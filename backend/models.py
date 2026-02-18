@@ -4,7 +4,7 @@ class UserRegister(BaseModel):
     """Model for user registration"""
     email: EmailStr
     password: str
-    website: str = "" //honeypot field
+    website: str = "" # honeypot field
 
     @field_validator('password')
     def validate_password(cls, v):
