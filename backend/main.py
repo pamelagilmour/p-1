@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 from typing import List
 from cache_service import (
     get_cache, set_cache, delete_cache, 
-    delete_cache_pattern, clear_user_cache, get_cache_stats
+    delete_cache_pattern, clear_user_cache, get_cache_stats,
+    redis_client
 )
 
 # Import new modules
