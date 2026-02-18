@@ -652,7 +652,7 @@ def chat(
         }
 
     # Check daily AI limit
-    check_daily_ai_limit(current_user['user_id'], limit=20)
+    # check_daily_ai_limit(current_user['user_id'], limit=20)
 
     try:
         response = chat_with_knowledge_base(
