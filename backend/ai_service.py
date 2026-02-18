@@ -12,13 +12,24 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 def get_db_connection():
     """Create database connection"""
-    conn = psycopg2.connect(
-        host="localhost",
-        database="knowledge_base",
-        user="",  # Your Mac username
-        password="",
-        cursor_factory=RealDictCursor
-    )
+    # Use DATABASE_URL from environment (Railway sets this)
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # Railway/Production - use DATABASE_URL
+        conn = psycopg2.connect(
+            database_url,
+            cursor_factory=RealDictCursor
+        )
+    else:
+        # Local development - use individual params
+        conn = psycopg2.connect(
+            host="localhost",
+            database="knowledge_base",
+            user="",  # Your Mac username for local
+            password="",
+            cursor_factory=RealDictCursor
+        )
+    
     return conn
 
 def get_user_entries(user_id: int) -> list:
