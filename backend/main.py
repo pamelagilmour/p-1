@@ -34,6 +34,10 @@ app = FastAPI(title="AI Knowledge Base API")
 @app.middleware("http")
 async def global_rate_limit_middleware(request: Request, call_next):
     """Rate limit by IP address globally"""
+
+    # ALWAYS allow OPTIONS requests (CORS preflight)
+    if request.method == "OPTIONS":
+        return await call_next(request)
     
     client_ip = request.client.host
     
@@ -671,4 +675,26 @@ def rate_limit_status(current_user: dict = Depends(get_current_user)):
         "requests_limit": result['limit'],
         "reset_time": result['reset_time'],
         "reset_in_seconds": result['reset_time'] - int(time.time())
+    }
+
+@app.get("/api/admin/usage")
+def admin_usage(current_user: dict = Depends(get_current_user)):
+    """Get usage stats"""
+    
+    # Count total users
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM knowledge_entries")
+    entry_count = cursor.fetchone()[0]
+    
+    cursor.close()
+    conn.close()
+    
+    return {
+        "total_users": user_count,
+        "total_entries": entry_count,
+        "cache_stats": get_cache_stats()
     }
