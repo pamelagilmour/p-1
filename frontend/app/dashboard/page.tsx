@@ -209,7 +209,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold">AI Knowledge Base</h1>
+              <h1 className="text-xl font-bold text-gray-950">AI Knowledge Base</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">{user.email}</span>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
 
           {/* Header with Add Button */}
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">Your Knowledge Entries</h2>
+            <h2 className="text-2xl font-bold text-gray-950">Your Knowledge Entries</h2>
             {!showForm && (
               <button
                 onClick={() => setShowForm(true)}
@@ -243,7 +243,7 @@ export default function DashboardPage() {
           {/* Create/Edit Form */}
           {showForm && (
             <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h3 className="text-xl font-semibold mb-4">
+              <h3 className="text-xl font-semibold mb-4 text-gray-950">
                 {editingEntry ? 'Edit Entry' : 'New Entry'}
               </h3>
 
@@ -326,7 +326,7 @@ export default function DashboardPage() {
               {entries.map((entry) => (
                 <div key={entry.id} className="bg-white shadow rounded-lg p-6">
                   <div className="flex justify-between items-start mb-3">
-                    <h3 className="text-xl font-semibold">{entry.title}</h3>
+                    <h3 className="text-xl font-semibold text-gray-950">{entry.title}</h3>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEdit(entry)}
@@ -367,7 +367,7 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="mt-8 bg-white shadow rounded-lg p-6">
-          <h2 className="text-2xl font-bold mb-4">🤖 Ask AI About Your Knowledge Base</h2>
+          <h2 className="text-2xl font-bold mb-4 text-gray-950">🤖 Ask AI About Your Knowledge Base</h2>
 
           {/* Chat History */}
           <div className="mb-4 space-y-3 max-h-96 overflow-y-auto">

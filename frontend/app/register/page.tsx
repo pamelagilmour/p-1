@@ -53,7 +53,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div>
-          <h2 className="text-3xl font-bold text-center">Create account</h2>
+          <h2 className="text-3xl font-bold text-center text-gray-950">Create account</h2>
           <p className="mt-2 text-center text-gray-600">
             Start building your knowledge base
           </p>
@@ -117,7 +117,7 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          // Add hidden field in form
+          {/* Add hidden field in form */}
           <input
             type="text"
             name="website"
