@@ -6,12 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize Redis client
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    db=0,
-    decode_responses=True  # Auto-decode bytes to strings
-)
+# Railway provides REDIS_URL or individual host/port
+redis_url = os.getenv("REDIS_URL")
 
 def get_cache(key: str):
     """Get value from cache"""
@@ -25,6 +21,18 @@ def get_cache(key: str):
     except Exception as e:
         print(f"Cache error: {e}")
         return None
+
+if redis_url:
+    # Use connection URL (Railway format)
+    redis_client = redis.from_url(redis_url, decode_responses=True)
+else:
+    # Use individual params (fallback for local dev)
+    redis_client = redis.Redis(
+        host=os.getenv("REDISHOST", "localhost"),
+        port=int(os.getenv("REDISPORT", 6379)),
+        db=0,
+        decode_responses=True
+    )
 
 def set_cache(key: str, value: any, ttl: int = 900):
     """

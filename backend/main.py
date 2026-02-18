@@ -63,6 +63,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://p-11-one.vercel.app",
+        "https://p-11-one.vercel.app/",
         "https://*.vercel.app",  # Allow all Vercel preview deployments
     ],
     allow_credentials=True,
