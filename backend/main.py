@@ -32,20 +32,33 @@ app = FastAPI(title="AI Knowledge Base API")
 
 # Add middleware to track rate limits on all requests
 @app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    """Add rate limit headers to all responses"""
+async def global_rate_limit_middleware(request: Request, call_next):
+    """Rate limit by IP address globally"""
     
-    # Skip rate limiting for public endpoints
-    public_paths = ["/", "/api/health", "/api/auth/register", "/api/auth/login", "/docs", "/openapi.json"]
+    client_ip = request.client.host
     
-    if request.url.path in public_paths:
-        response = await call_next(request)
-        return response
+    # Skip for health check
+    if request.url.path in ["/", "/api/health", "/docs", "/openapi.json"]:
+        return await call_next(request)
     
-    # For protected endpoints, check if user is authenticated
-    # We'll do the actual rate limit check in the dependency
-    response = await call_next(request)
-    return response
+    # Rate limit: 300 requests per hour per IP
+    key = f"global_rate_limit:ip:{client_ip}"
+    count = redis_client.get(key)
+    count = int(count) if count else 0
+    
+    if count >= 300:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again later."},
+            headers={"Retry-After": "3600"}
+        )
+    
+    if count == 0:
+        redis_client.setex(key, 3600, 1)
+    else:
+        redis_client.incr(key)
+    
+    return await call_next(request)
 
 # Create dependency for rate limiting
 def rate_limit_dependency(current_user: dict = Depends(get_current_user)):
@@ -131,7 +144,10 @@ def health_check():
 def register(user: UserRegister):
     """Register a new user"""
     print(f"🔍 Register attempt for: {user.email}")
-    
+        # Check honeypot
+    if user.website:
+        raise HTTPException(status_code=400, detail="Invalid registration")
+
     try:
         conn = get_db_connection()
         print("✅ Database connected")
@@ -620,7 +636,19 @@ def chat(
     chat_message: ChatMessage,
     current_user: dict = Depends(rate_limit_dependency)
 ):
-    """Send a message to Claude with knowledge base access"""
+    """Send a message to Claude (disabled in public demo)"""
+    
+    # Disable AI in public demo to prevent abuse
+    if os.getenv("ENABLE_AI_CHAT", "false").lower() != "true":
+        return {
+            "response": "🔒 AI chat is disabled in the public demo to prevent abuse and manage costs. "
+                       "This feature is fully functional - see the GitHub code and demo video! "
+                       "Recruiters: Contact me for a private demo with AI enabled."
+        }
+
+    # Check daily AI limit
+    check_daily_ai_limit(current_user['user_id'], limit=20)
+
     try:
         response = chat_with_knowledge_base(
             message=chat_message.message,

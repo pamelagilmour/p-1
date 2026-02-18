@@ -30,6 +30,10 @@ export default function Home() {
         <p className="text-xl text-gray-600 mb-8">
           Your personal knowledge base powered by AI
         </p>
+        <p className="text-sm text-orange-600 mb-8">
+          ⚠️ Public Demo: AI chat disabled to prevent abuse. See code on GitHub or request private demo.
+        </p>
+
         <div className="space-x-4">
           <Link
             href="/login"
