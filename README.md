@@ -2,7 +2,7 @@
 
 A full-stack application that helps developers organize and query their technical knowledge using AI. Built with custom MCP server integration, Redis caching, and background job processing.
 
-![Screenshot](./screenshots/main-interface.png)
+![Screenshot](./screenshots/ui-Screenshot-mar-26.png)
 
 ## Key Features
 
