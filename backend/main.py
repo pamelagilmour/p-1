@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.responses import JSONResponse
-from rate_limiter import check_rate_limit, rate_limiter, check_daily_ai_limit
+from rate_limiter import check_rate_limit, rate_limiter, check_daily_ai_limit, check_auth_rate_limit
 import time
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
@@ -23,6 +23,7 @@ from models import (
 )
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from ai_service import chat_with_knowledge_base
+from audit_service import audit_logger
 
 # Load environment vars
 load_dotenv()
@@ -30,6 +31,52 @@ load_dotenv()
 # Initialize app
 app = FastAPI(title="AI Knowledge Base API")
 
+
+# Security headers middleware
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+    
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    # Enable XSS protection
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Strict Transport Security (HTTPS only)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    
+    # Referrer Policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    # Permissions Policy (formerly Feature Policy)
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), "
+        "microphone=(), "
+        "camera=(), "
+        "payment=(), "
+        "usb=(), "
+        "magnetometer=(), "
+        "gyroscope=(), "
+        "accelerometer=()"
+    )
+    
+    return response
 
 # Add middleware to track rate limits on all requests
 @app.middleware("http")
@@ -52,6 +99,12 @@ async def global_rate_limit_middleware(request: Request, call_next):
     count = int(count) if count else 0
     
     if count >= 300:
+        # Log rate limit violation
+        audit_logger.log_rate_limit(
+            event_type=audit_logger.RATE_LIMIT_EXCEEDED,
+            ip_address=client_ip,
+            details={"endpoint": str(request.url.path)}
+        )
         return JSONResponse(
             status_code=429,
             content={"detail": "Too many requests. Please try again later."},
@@ -146,8 +199,12 @@ def health_check():
 # Auth Endpoints
 
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user: UserRegister):
+def register(user: UserRegister, request: Request):
     """Register a new user"""
+    # Rate limit by IP to prevent spam registrations
+    client_ip = request.client.host
+    check_auth_rate_limit(f"register:{client_ip}")
+    
     # Check honeypot
     if user.website:
         raise HTTPException(status_code=400, detail="Invalid registration")
@@ -179,23 +236,62 @@ def register(user: UserRegister):
         cursor.close()
         conn.close()
         
+        # Log successful registration
+        audit_logger.log(
+            event_type=audit_logger.REGISTER_SUCCESS,
+            event_category=audit_logger.CATEGORY_AUTH,
+            severity=audit_logger.SEVERITY_INFO,
+            status=audit_logger.STATUS_SUCCESS,
+            user_id=new_user['id'],
+            user_email=new_user['email'],
+            ip_address=client_ip,
+            user_agent=request.headers.get("user-agent")
+        )
+        
         return UserResponse(
             id=new_user['id'],
             email=new_user['email'],
             created_at=str(new_user['created_at'])
         )
     
-    except HTTPException:
+    except HTTPException as he:
+        # Log failed registration
+        audit_logger.log(
+            event_type=audit_logger.REGISTER_FAILED,
+            event_category=audit_logger.CATEGORY_AUTH,
+            severity=audit_logger.SEVERITY_WARNING,
+            status=audit_logger.STATUS_FAILURE,
+            user_email=user.email,
+            ip_address=client_ip,
+            details={"reason": str(he.detail)},
+            user_agent=request.headers.get("user-agent")
+        )
         raise
     except Exception as e:
+        # Log failed registration
+        audit_logger.log(
+            event_type=audit_logger.REGISTER_FAILED,
+            event_category=audit_logger.CATEGORY_AUTH,
+            severity=audit_logger.SEVERITY_ERROR,
+            status=audit_logger.STATUS_FAILURE,
+            user_email=user.email,
+            ip_address=client_ip,
+            details={"error": "system_error"},
+            user_agent=request.headers.get("user-agent")
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
         )
 
 @app.post("/api/auth/login", response_model=TokenResponse)
-def login(user: UserLogin):
+def login(user: UserLogin, request: Request):
     """Login and get access token"""
+    # Rate limit by IP + email to prevent brute force
+    client_ip = request.client.host
+    rate_limit_key = f"login:{client_ip}:{user.email}"
+    check_auth_rate_limit(rate_limit_key)
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -212,6 +308,13 @@ def login(user: UserLogin):
         
         # Verify user exists and password is correct
         if not db_user or not verify_password(user.password, db_user['password_hash']):
+            # Log failed login
+            audit_logger.log_auth_failure(
+                user_email=user.email,
+                ip_address=client_ip,
+                reason="invalid_credentials",
+                user_agent=request.headers.get("user-agent")
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password"
@@ -220,6 +323,14 @@ def login(user: UserLogin):
         # Create access token
         access_token = create_access_token(
             data={"user_id": db_user['id'], "email": db_user['email']}
+        )
+        
+        # Log successful login
+        audit_logger.log_auth_success(
+            user_id=db_user['id'],
+            user_email=db_user['email'],
+            ip_address=client_ip,
+            user_agent=request.headers.get("user-agent")
         )
         
         return TokenResponse(
@@ -493,6 +604,14 @@ def update_entry(
         # Invalidate cache for this user
         clear_user_cache(current_user['user_id'])
         
+        # Log entry update
+        audit_logger.log_resource_action(
+            action="update",
+            resource=f"entry:{entry_id}",
+            user_id=current_user['user_id'],
+            ip_address="system"
+        )
+        
         return KnowledgeEntryResponse(
             id=updated_entry['id'],
             user_id=updated_entry['user_id'],
@@ -536,6 +655,14 @@ def delete_entry(entry_id: int, current_user: dict = Depends(rate_limit_dependen
         
         # Invalidate cache for this user
         clear_user_cache(current_user['user_id'])
+        
+        # Log entry deletion
+        audit_logger.log_resource_action(
+            action="delete",
+            resource=f"entry:{entry_id}",
+            user_id=current_user['user_id'],
+            ip_address="system"
+        )
         
         return None
     except HTTPException:
@@ -639,4 +766,72 @@ def admin_usage(current_user: dict = Depends(get_current_user)):
         "total_users": user_count,
         "total_entries": entry_count,
         "cache_stats": get_cache_stats()
+    }
+
+@app.get("/api/admin/audit-logs")
+def get_audit_logs(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 100,
+    severity: str = None,
+    user_id: int = None
+):
+    """
+    Get recent audit logs (admin endpoint)
+    
+    Query params:
+        - limit: Number of logs to return (default 100, max 500)
+        - severity: Filter by severity (info, warning, error, critical)
+        - user_id: Filter by user ID
+    """
+    # Limit the limit to prevent abuse
+    limit = min(limit, 500)
+    
+    logs = audit_logger.get_recent_logs(
+        limit=limit,
+        user_id=user_id,
+        severity=severity
+    )
+    
+    return {
+        "count": len(logs),
+        "logs": logs
+    }
+
+@app.get("/api/admin/security-summary")
+def get_security_summary(
+    current_user: dict = Depends(get_current_user),
+    hours: int = 24
+):
+    """
+    Get security event summary for the last N hours
+    Shows counts of failed logins, rate limits, etc.
+    """
+    hours = min(hours, 168)  # Max 1 week
+    
+    summary = audit_logger.get_security_summary(hours=hours)
+    
+    return {
+        "period_hours": hours,
+        "events": summary
+    }
+
+@app.get("/api/my/audit-logs")
+def get_my_audit_logs(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 50
+):
+    """
+    Get your own audit logs (user endpoint)
+    Allows users to see their own activity history
+    """
+    limit = min(limit, 100)
+    
+    logs = audit_logger.get_recent_logs(
+        limit=limit,
+        user_id=current_user['user_id']
+    )
+    
+    return {
+        "count": len(logs),
+        "logs": logs
     }

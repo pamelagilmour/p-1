@@ -62,8 +62,10 @@ class RateLimiter:
             "limit": self.max_requests
         }
 
-# Create rate limiter instance
+# Create rate limiter instances for different endpoints
 rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+auth_rate_limiter = RateLimiter(max_requests=5, window_seconds=900)  # 5 attempts per 15 min
+chat_rate_limiter = RateLimiter(max_requests=10, window_seconds=3600)  # 10 per hour
 
 def check_rate_limit(user_id: int):
     """
@@ -146,3 +148,31 @@ def check_daily_ai_limit(user_id: int, limit: int = 20):
         "remaining": limit - current_count - 1,
         "reset_time": current_time + ttl
     }
+
+def check_auth_rate_limit(identifier: str):
+    """
+    Check authentication rate limit (by IP or email)
+    Stricter limits to prevent brute force: 5 attempts per 15 minutes
+    
+    Args:
+        identifier: IP address or email to rate limit
+    
+    Raises:
+        HTTPException: If rate limit exceeded
+    """
+    result = auth_rate_limiter.check_rate_limit(identifier)
+    
+    if not result["allowed"]:
+        minutes_remaining = (result["reset_time"] - int(time.time())) // 60
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many login attempts. Please try again in {minutes_remaining} minutes.",
+            headers={
+                "X-RateLimit-Limit": str(result["limit"]),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(result["reset_time"]),
+                "Retry-After": str(result["reset_time"] - int(time.time()))
+            }
+        )
+    
+    return result
