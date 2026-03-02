@@ -401,47 +401,13 @@ def create_entry(
             detail=str(e)
         )
 
-    """Create a new knowledge entry"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """INSERT INTO knowledge_entries (user_id, title, content, tags)
-               VALUES (%s, %s, %s, %s)
-               RETURNING id, user_id, title, content, tags, created_at, updated_at""",
-            (current_user['user_id'], entry.title, entry.content, entry.tags)
-        )
-        new_entry = cursor.fetchone()
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        # Invalidate this user's entries list cache
-        cache_delete_pattern(f"entries:user:{current_user['user_id']}")
-        
-        return KnowledgeEntryResponse(
-            id=new_entry['id'],
-            user_id=new_entry['user_id'],
-            title=new_entry['title'],
-            content=new_entry['content'],
-            tags=new_entry['tags'] or [],
-            created_at=str(new_entry['created_at']),
-            updated_at=str(new_entry['updated_at'])
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
 @app.get("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
 def get_entry(entry_id: int, current_user: dict = Depends(rate_limit_dependency)):
     """Get a specific knowledge entry"""
     
     cache_key = f"entry:{entry_id}:user:{current_user['user_id']}"
-    cached = cache_get(cache_key)
+    cached = get_cache(cache_key)
     if cached:
         return cached
 
@@ -471,50 +437,13 @@ def get_entry(entry_id: int, current_user: dict = Depends(rate_limit_dependency)
             updated_at=str(entry['updated_at'])
         )
         
-        cache_set(cache_key, result.model_dump(), ttl=300)
+        set_cache(cache_key, result.model_dump(), ttl=300)
         return result
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    """Get a specific knowledge entry"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """SELECT id, user_id, title, content, tags, created_at, updated_at
-               FROM knowledge_entries
-               WHERE id = %s AND user_id = %s""",
-            (entry_id, current_user['user_id'])
-        )
-        entry = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if not entry:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Entry not found"
-            )
-        
-        return KnowledgeEntryResponse(
-            id=entry['id'],
-            user_id=entry['user_id'],
-            title=entry['title'],
-            content=entry['content'],
-            tags=entry['tags'] or [],
-            created_at=str(entry['created_at']),
-            updated_at=str(entry['updated_at'])
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
 # Update update_entry to invalidate cache
 @app.put("/api/entries/{entry_id}", response_model=KnowledgeEntryResponse)
@@ -652,7 +581,7 @@ def chat(
         }
 
     # Check daily AI limit
-    # check_daily_ai_limit(current_user['user_id'], limit=20)
+    check_daily_ai_limit(current_user['user_id'], limit=20)
 
     try:
         response = chat_with_knowledge_base(
