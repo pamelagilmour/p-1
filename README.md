@@ -1,291 +1,95 @@
-# AI-Powered Knowledge Base
+# Dev Notes AI
 
-> A full-stack application that lets users store knowledge entries and ask AI questions about their data using a custom MCP server and Claude API.
+A full-stack application that helps developers organize and query their technical knowledge using AI. Built with custom MCP server integration, Redis caching, and background job processing.
 
-## 🚀 Status: Core Features Complete
+![Screenshot](./screenshots/main-interface.png)
 
-Core functionality is working! Currently adding system design elements (caching, rate limiting).
+## Key Features
 
-## ✨ Demo
+- **AI-powered search and knowledge retrieval** - Natural language queries across your knowledge base
+- **Custom MCP server for tool integration** - Extensible architecture for adding new capabilities
+- **Redis caching** - Fast query responses and optimized performance
+- **Background job processing** - Async indexing and data processing
+- **Modern tech stack** - Next.js, TypeScript, FastAPI, PostgreSQL
 
-**Storing Knowledge:**
-- Create, edit, and delete knowledge entries with tags
-- Organized personal knowledge base
+## Demo
 
-**AI Chat:**
-- Ask Claude questions about your knowledge base
-- Claude uses custom MCP tools to search your database
-- Agentic loop - Claude decides which tools to call
+- **[Live Demo](your-deployed-url)** - Try it out (rate-limited for security)
+- **[Video Walkthrough](youtube-link)** - 2-minute feature overview
 
-Example queries:
-- "What do I know about React?"
-- "Show me all my entries tagged with TypeScript"
-- "Summarize everything in my knowledge base"
-
-## 📋 Overview
-
-This project demonstrates:
-- Full-stack development (Next.js + FastAPI)
-- Custom MCP server integration
-- AI agent implementation with Claude API
-- JWT authentication and protected routes
-- PostgreSQL database design with relationships
-- Production-grade API design (validation, error handling, status codes)
-- System design patterns (caching, message queues - in progress)
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 **Frontend:**
-- Next.js 14 (App Router)
+- Next.js 14
 - TypeScript
-- Tailwind CSS
-- React Context (auth state management)
+- React
+- [Any UI library you're using - Tailwind? shadcn?]
 
 **Backend:**
-- Python 3.10+
-- FastAPI
-- SQLAlchemy
+- FastAPI (Python)
 - PostgreSQL
-- JWT Authentication (python-jose)
-- Password hashing (passlib/bcrypt)
+- Redis
+- [Other backend tools]
 
-**AI/MCP:**
-- Anthropic Claude API
-- Custom MCP Server (FastMCP)
-- Agentic tool loop
+**AI/Integration:**
+- Claude API
+- Custom MCP Protocol implementation
 
-**Infrastructure:**
-- Redis (caching - in progress)
-- Docker Compose (in progress)
+## Architecture
 
-## 🏗️ Architecture
-```
-User
-  ↓
-Frontend (Next.js)
-  ↓
-Backend API (FastAPI)
-  ↓         ↓
-Database   Claude API
-(PostgreSQL)   ↓
-  ↑       MCP Server
-  └───────────┘
-  (Claude searches DB
-   via MCP tools)
-```
+- User submits query through Next.js frontend
+- Request hits FastAPI backend
+- Redis cache checked for existing results
+- If cache miss, MCP server processes query with Claude API
+- Background jobs handle indexing and data updates
+- Results returned and cached for future queries
 
-**AI Flow:**
-1. User asks question in chat interface
-2. Frontend sends request to FastAPI backend
-3. Backend calls Claude API with MCP tools attached
-4. Claude decides which tools to use
-5. MCP tools query PostgreSQL database
-6. Claude synthesizes results into natural language
-7. Response returned to user
-
-## 🗄️ Database Schema
-```sql
--- Users table
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Knowledge entries table
-CREATE TABLE knowledge_entries (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(500) NOT NULL,
-    content TEXT NOT NULL,
-    tags TEXT[],
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## 🤖 MCP Server Tools
-
-Custom MCP server exposes 4 tools to Claude:
-
-| Tool | Description |
-|------|-------------|
-| `search_knowledge` | Search entries by keyword in title/content |
-| `get_all_entries` | Get all entries for a user |
-| `get_entry_by_id` | Get specific entry by ID |
-| `search_by_tag` | Filter entries by tag |
-
-## 🔒 API Endpoints
-
-**Authentication:**
-```
-POST /api/auth/register   - Create account
-POST /api/auth/login      - Login, get JWT token
-GET  /api/auth/me         - Get current user (protected)
-```
-
-**Knowledge Entries (all protected):**
-```
-GET    /api/entries        - List all entries
-POST   /api/entries        - Create entry
-GET    /api/entries/{id}   - Get single entry
-PUT    /api/entries/{id}   - Update entry
-DELETE /api/entries/{id}   - Delete entry
-```
-
-**AI Chat (protected):**
-```
-POST /api/chat             - Send message to Claude
-```
-
-## 📊 Features
-
-**Complete ✅**
-- [x] User registration and login
-- [x] JWT authentication with protected routes
-- [x] Full CRUD for knowledge entries
-- [x] Tag support for entries
-- [x] Custom MCP server with 4 tools
-- [x] Claude API integration
-- [x] Agentic loop (Claude decides which tools to use)
-- [x] Chat interface in dashboard
-- [x] Redis caching for API responses
-- [x] Rate limiting (token bucket algorithm)
-- [x] Deployment (Vercel + Railway)
-
-**In Progress ⏳**
-- [ ] CI/CD pipeline (GitHub Actions)
-
-
-**Planned 📋**
-- [ ] Search endpoint with full-text search
-- [ ] Pagination for large entry lists
-- [ ] Entry categories
-- [ ] Export knowledge base
-- [ ] Background job processing
-
-## 🚦 Getting Started
+## Local Development
 
 ### Prerequisites
 - Node.js 18+
-- Python 3.10+
-- PostgreSQL 15+
+- Python 3.11+
+- PostgreSQL
+- Redis
 
-### Database Setup
-```sql
-CREATE DATABASE knowledge_base;
+### Setup
 
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+1. Clone the repository
+\`\`\`bash
+git clone https://github.com/pamelagilmour/dev-notes-ai.git
+cd dev-notes-ai
+\`\`\`
 
-CREATE TABLE knowledge_entries (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(500) NOT NULL,
-    content TEXT NOT NULL,
-    tags TEXT[],
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+2. [Rest of your current setup instructions]
 
-CREATE INDEX idx_knowledge_entries_user_id ON knowledge_entries(user_id);
-CREATE INDEX idx_knowledge_entries_tags ON knowledge_entries USING GIN(tags);
-```
+## Security Features
 
-### Frontend Setup
-```bash
-cd frontend
-npm install
-npm run dev
-```
+- Rate limiting on AI queries
+- API key management
+- [Whatever app sec you implement]
 
-### Backend Setup
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
+## Roadmap
 
-### MCP Server Setup
-```bash
-cd mcp-server
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python knowledge_base_server.py
-```
+- [ ] Additional MCP tool integrations
+- [ ] Export/import knowledge base
+- [ ] Team collaboration features
 
-### Environment Variables
+## License
 
-**backend/.env**
-```
-DATABASE_URL=postgresql://localhost:5432/knowledge_base
-SECRET_KEY=your-secret-key-here
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
-
-## 🧪 Testing
-```bash
-# Backend tests (coming soon)
-pytest
-
-# Test MCP server
-mcp dev mcp-server/knowledge_base_server.py
-
-# API docs (auto-generated)
-http://localhost:8000/docs
-```
-
-## 📈 System Design Highlights
-
-**Current:**
-- RESTful API with proper status codes and error handling
-- JWT authentication with 24hr token expiration
-- Password hashing with bcrypt
-- Database indexes for query performance
-- Input validation with Pydantic models
-- CORS configuration
-- Agentic AI loop with tool orchestration
-- Redis caching (target: 80%+ cache hit rate)
-- Rate limiting (token bucket: 100 req/min per user)
-
-**Coming Soon:**
-- Background job processing for long AI tasks
-- Horizontal scaling strategy
-
-## 🚀 Deployment
-
-- Frontend: [Vercel](https://p-11-one.vercel.app/)
-- Backend: [Railway](https://p-1-production.up.railway.app/)
-- Database: Railway PostgreSQL (coming soon)
-
-[Live Demo](https://p-11-one.vercel.app/) AI chat disabled.
-
-## 📝 Documentation
-
-- [Architecture Overview](./docs/architecture.md)
-- [Database Schema](./docs/database-schema.md)
-- [API Endpoints](./docs/api-endpoints.md)
-- [MCP Server Documentation](./mcp-server/README.md)
-
-## 🎯 What I Learned
-
-- How MCP protocol works and how to build custom servers
-- Agentic AI loops (Claude decides which tools to call)
-- JWT authentication implementation from scratch
-- FastAPI with PostgreSQL (SQLAlchemy, psycopg2)
-- Full-stack TypeScript with Next.js App Router
-- System design patterns for scalable applications
+MIT
 
 ---
 
-Built as part of my software engineering portfolio | [View Other Projects](https://github.com/pamelagilmour)
+Built by [Pam Gilmour](https://my-next-app.sodalitemix.workers.dev/) | [LinkedIn](https://www.linkedin.com/in/pamela-gilmour/) | [GitHub](https://github.com/pamelagilmour)
+```
+
+## Don't Forget to Update Your Portfolio
+
+Once this is all done, update your portfolio project section to:
+```
+Dev Notes AI
+A full-stack knowledge management system with AI-powered search, custom MCP server integration, and production-grade caching and background job processing.
+
+Tech: Next.js, TypeScript, FastAPI, PostgreSQL, Redis, Claude API
+
+[View Demo] [View Code] [Watch Video]
