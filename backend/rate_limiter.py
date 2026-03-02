@@ -84,7 +84,65 @@ def check_rate_limit(user_id: int):
             }
         )
     
-    # Log rate limit info
-    print(f"⏱️  Rate limit check: user {user_id} - {result['remaining']}/{result['limit']} remaining")
-    
     return result
+
+def check_daily_ai_limit(user_id: int, limit: int = 20):
+    """
+    Check daily AI request limit (separate from general rate limit)
+    Default: 20 AI requests per 24 hours
+    
+    Args:
+        user_id: The user's ID
+        limit: Maximum AI requests per day (default 20)
+    
+    Raises:
+        HTTPException: If daily limit is exceeded
+    """
+    key = f"ai_limit:user:{user_id}:daily"
+    window_seconds = 86400  # 24 hours
+    current_time = int(time.time())
+    
+    # Get current count and TTL
+    pipe = redis_client.pipeline()
+    pipe.get(key)
+    pipe.ttl(key)
+    results = pipe.execute()
+    
+    current_count = int(results[0]) if results[0] else 0
+    ttl = results[1]
+    
+    # If key doesn't exist or expired, start new window
+    if current_count == 0 or ttl == -2:
+        redis_client.setex(key, window_seconds, 1)
+        return {
+            "allowed": True,
+            "remaining": limit - 1,
+            "reset_time": current_time + window_seconds
+        }
+    
+    # Check if limit exceeded
+    if current_count >= limit:
+        reset_time = current_time + ttl
+        hours_remaining = ttl // 3600
+        minutes_remaining = (ttl % 3600) // 60
+        
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Daily AI request limit exceeded ({limit} requests per day). "
+                   f"Resets in {hours_remaining}h {minutes_remaining}m.",
+            headers={
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(reset_time),
+                "Retry-After": str(ttl)
+            }
+        )
+    
+    # Increment counter
+    redis_client.incr(key)
+    
+    return {
+        "allowed": True,
+        "remaining": limit - current_count - 1,
+        "reset_time": current_time + ttl
+    }

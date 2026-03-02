@@ -14,12 +14,9 @@ def get_cache(key: str):
     try:
         value = redis_client.get(key)
         if value:
-            print(f"✅ Cache HIT: {key}")
             return json.loads(value)
-        print(f"❌ Cache MISS: {key}")
         return None
     except Exception as e:
-        print(f"Cache error: {e}")
         return None
 
 if redis_url:
@@ -45,20 +42,16 @@ def set_cache(key: str, value: any, ttl: int = 900):
             ttl,
             json.dumps(value, default=str)  # default=str handles datetime
         )
-        print(f"💾 Cache SET: {key} (TTL: {ttl}s)")
         return True
     except Exception as e:
-        print(f"Cache error: {e}")
         return False
 
 def delete_cache(key: str):
     """Delete a specific cache key"""
     try:
         redis_client.delete(key)
-        print(f"🗑️  Cache DELETE: {key}")
         return True
     except Exception as e:
-        print(f"Cache error: {e}")
         return False
 
 def delete_cache_pattern(pattern: str):
@@ -67,10 +60,8 @@ def delete_cache_pattern(pattern: str):
         keys = redis_client.keys(pattern)
         if keys:
             redis_client.delete(*keys)
-            print(f"🗑️  Cache DELETE pattern: {pattern} ({len(keys)} keys)")
         return True
     except Exception as e:
-        print(f"Cache error: {e}")
         return False
 
 def clear_user_cache(user_id: int):

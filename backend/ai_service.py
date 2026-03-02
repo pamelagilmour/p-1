@@ -51,7 +51,6 @@ def get_user_entries(user_id: int) -> list:
         
         return [dict(entry) for entry in entries]
     except Exception as e:
-        print(f"Error fetching entries: {e}")
         return []
 
 def search_entries(user_id: int, query: str) -> list:
@@ -78,7 +77,6 @@ def search_entries(user_id: int, query: str) -> list:
         
         return [dict(entry) for entry in entries]
     except Exception as e:
-        print(f"Error searching entries: {e}")
         return []
 
 def search_by_tag(user_id: int, tag: str) -> list:
@@ -101,7 +99,6 @@ def search_by_tag(user_id: int, tag: str) -> list:
         
         return [dict(entry) for entry in entries]
     except Exception as e:
-        print(f"Error searching by tag: {e}")
         return []
 
 # Define tools for Claude
@@ -146,8 +143,6 @@ TOOLS = [
 
 def process_tool_call(tool_name: str, tool_input: dict, user_id: int) -> str:
     """Process a tool call from Claude"""
-    print(f"Claude is calling tool: {tool_name} with {tool_input}")
-    
     if tool_name == "search_knowledge":
         entries = search_entries(user_id, tool_input["query"])
         if not entries:
@@ -203,9 +198,6 @@ def chat_with_knowledge_base(message: str, user_id: int) -> str:
     Send a message to Claude with access to the user's knowledge base tools
     Claude will decide which tools to use to answer the question
     """
-    print(f"\nUser message: {message}")
-    print(f"User ID: {user_id}")
-    
     messages = [{"role": "user", "content": message}]
     
     # Agentic loop - Claude may call multiple tools
@@ -220,8 +212,6 @@ def chat_with_knowledge_base(message: str, user_id: int) -> str:
             tools=TOOLS,
             messages=messages
         )
-        
-        print(f"Claude response type: {response.stop_reason}")
         
         # If Claude is done, return the response
         if response.stop_reason == "end_turn":

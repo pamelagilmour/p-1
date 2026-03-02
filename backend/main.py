@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.responses import JSONResponse
-from rate_limiter import check_rate_limit, rate_limiter
+from rate_limiter import check_rate_limit, rate_limiter, check_daily_ai_limit
 import time
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
@@ -148,20 +148,17 @@ def health_check():
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserRegister):
     """Register a new user"""
-    print(f"🔍 Register attempt for: {user.email}")
-        # Check honeypot
+    # Check honeypot
     if user.website:
         raise HTTPException(status_code=400, detail="Invalid registration")
 
     try:
         conn = get_db_connection()
-        print("✅ Database connected")
         cursor = conn.cursor()
         
         # Check if user already exists
         cursor.execute("SELECT id FROM users WHERE email = %s", (user.email,))
         existing = cursor.fetchone()
-        print(f"🔍 Existing user check: {existing}")
         
         if existing:
             raise HTTPException(
@@ -171,14 +168,12 @@ def register(user: UserRegister):
         
         # Hash password and create user
         hashed_password = hash_password(user.password)
-        print("✅ Password hashed")
         
         cursor.execute(
             "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING id, email, created_at",
             (user.email, hashed_password)
         )
         new_user = cursor.fetchone()
-        print(f"✅ User created: {new_user}")
         
         conn.commit()
         cursor.close()
@@ -193,12 +188,9 @@ def register(user: UserRegister):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ ERROR: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Registration failed"
         )
 
 @app.post("/api/auth/login", response_model=TokenResponse)
@@ -350,12 +342,9 @@ def get_entries(current_user: dict = Depends(rate_limit_dependency)):
         return result
         
     except Exception as e:
-        print(f"ERROR: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Failed to fetch entries"
         )
 
 # Knowledge entries endpoints
@@ -605,6 +594,29 @@ def rate_limit_status(current_user: dict = Depends(get_current_user)):
         "requests_limit": result['limit'],
         "reset_time": result['reset_time'],
         "reset_in_seconds": result['reset_time'] - int(time.time())
+    }
+
+@app.get("/api/ai-limit/status")
+def ai_limit_status(current_user: dict = Depends(get_current_user)):
+    """Get current AI request limit status for user"""
+    from cache_service import redis_client
+    
+    key = f"ai_limit:user:{current_user['user_id']}:daily"
+    current_count = redis_client.get(key)
+    ttl = redis_client.ttl(key)
+    
+    current_count = int(current_count) if current_count else 0
+    limit = 20
+    remaining = max(0, limit - current_count)
+    reset_time = int(time.time()) + ttl if ttl > 0 else int(time.time()) + 86400
+    
+    return {
+        "user_id": current_user['user_id'],
+        "ai_requests_used": current_count,
+        "ai_requests_remaining": remaining,
+        "ai_requests_limit": limit,
+        "reset_time": reset_time,
+        "reset_in_seconds": ttl if ttl > 0 else 86400
     }
 
 @app.get("/api/admin/usage")
