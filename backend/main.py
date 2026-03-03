@@ -172,7 +172,7 @@ def get_db_connection():
 def root():
     """Root endpoint"""
     return {
-        "message": "Dev Notes AI API",
+        "message": "DevNotes AI API",
         "version": "0.0.0",
         "status": "running"
     }

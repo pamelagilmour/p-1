@@ -54,7 +54,7 @@ export default function Footer() {
               </li>
               <li>
                 <a 
-                  href="https://linkedin.com/in/pamelagilmour" 
+                  href="https://linkedin.com/in/pamela-gilmour" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition flex items-center gap-2"

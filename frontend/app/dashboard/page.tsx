@@ -229,7 +229,7 @@ export default function DashboardPage() {
 
           {/* Header with Add Button */}
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-950">Your Knowledge Entries</h2>
+            <h2 className="text-2xl font-bold text-gray-950">Your Entries</h2>
             {!showForm && (
               <button
                 onClick={() => setShowForm(true)}
